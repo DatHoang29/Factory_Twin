@@ -1,0 +1,418 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Factory {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @db.VarChar(255)
+  address     String   @db.VarChar(500)
+  description String?  @db.Text
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  zones   Zone[]
+  users   User[]
+  reports Report[]
+
+  @@map("factories")
+}
+
+model Zone {
+  id          BigInt  @id @default(autoincrement())
+  factoryId   BigInt  @map("factory_id")
+  name        String  @db.VarChar(255)
+  floorLevel  Int     @map("floor_level")
+  description String? @db.Text
+
+  factory    Factory     @relation(fields: [factoryId], references: [id])
+  machines   Machine[]
+  twinModels TwinModel[]
+
+  @@map("zones")
+}
+
+model TwinModel {
+  id         BigInt   @id @default(autoincrement())
+  zoneId     BigInt   @map("zone_id")
+  modelType  ModelType @map("model_type")
+  fileUrl    String   @map("file_url") @db.VarChar(500)
+  format     String   @db.VarChar(50)
+  version    Int      @default(1)
+  uploadedBy BigInt   @map("uploaded_by")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  zone     Zone @relation(fields: [zoneId], references: [id])
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  sourceNavigationPoints NavigationPoint[] @relation("SourceModel")
+  targetNavigationPoints NavigationPoint[] @relation("TargetModel")
+
+  @@map("twin_models")
+}
+
+enum ModelType {
+  THREE_D_MODEL @map("3D_MODEL")
+  PHOTO_360
+}
+
+model NavigationPoint {
+  id            BigInt  @id @default(autoincrement())
+  sourceModelId BigInt  @map("source_model_id")
+  targetModelId BigInt? @map("target_model_id")
+  machineId     BigInt? @map("machine_id")
+  positionX     Float   @map("position_x")
+  positionY     Float   @map("position_y")
+  positionZ     Float   @map("position_z")
+  label         String  @db.VarChar(255)
+
+  sourceModel TwinModel @relation("SourceModel", fields: [sourceModelId], references: [id])
+  targetModel TwinModel? @relation("TargetModel", fields: [targetModelId], references: [id])
+  machine     Machine?   @relation(fields: [machineId], references: [id])
+
+  @@map("navigation_points")
+}
+
+model Machine {
+  id           BigInt        @id @default(autoincrement())
+  zoneId       BigInt        @map("zone_id")
+  code         String        @unique @db.VarChar(100)
+  name         String        @db.VarChar(255)
+  type         String        @db.VarChar(100)
+  manufacturer String        @db.VarChar(255)
+  installDate  DateTime      @map("install_date") @db.Date
+  status       MachineStatus @default(STOPPED)
+  positionX    Float         @map("position_x")
+  positionY    Float         @map("position_y")
+  positionZ    Float         @map("position_z")
+  qrCode       String?       @map("qr_code") @db.VarChar(255)
+
+  zone                 Zone                  @relation(fields: [zoneId], references: [id])
+  sensors              Sensor[]
+  alerts               Alert[]
+  maintenanceSchedules MaintenanceSchedule[]
+  maintenanceTickets   MaintenanceTicket[]
+  activityLogs         MachineActivityLog[]
+  productionRecords    ProductionRecord[]
+  energyConsumption    EnergyConsumption[]
+  navigationPoints     NavigationPoint[]
+
+  @@map("machines")
+}
+
+enum MachineStatus {
+  RUNNING
+  STOPPED
+  MAINTENANCE
+  ERROR
+}
+
+model Sensor {
+  id           BigInt     @id @default(autoincrement())
+  machineId    BigInt     @map("machine_id")
+  sensorType   SensorType @map("sensor_type")
+  unit         String     @db.VarChar(50)
+  minThreshold Decimal?   @map("min_threshold") @db.Decimal(10, 2)
+  maxThreshold Decimal?   @map("max_threshold") @db.Decimal(10, 2)
+  mqttTopic    String?    @map("mqtt_topic") @db.VarChar(255)
+
+  machine  Machine          @relation(fields: [machineId], references: [id])
+  readings SensorReading[]
+  hourly   SensorReadingHourly[]
+  alerts   Alert[]
+
+  @@map("sensors")
+}
+
+enum SensorType {
+  TEMPERATURE
+  VIBRATION
+  SPEED
+  POWER
+  ONOFF
+  OUTPUT
+}
+
+model SensorReading {
+  id          BigInt   @id @default(autoincrement())
+  sensorId    BigInt   @map("sensor_id")
+  value       Decimal  @db.Decimal(15, 4)
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+  qualityFlag Int      @default(1) @map("quality_flag") @db.TinyInt
+
+  sensor Sensor @relation(fields: [sensorId], references: [id])
+
+  @@index([sensorId, recordedAt])
+  @@map("sensor_readings")
+}
+
+model SensorReadingHourly {
+  id          BigInt   @id @default(autoincrement())
+  sensorId    BigInt   @map("sensor_id")
+  periodStart DateTime @map("period_start")
+  avgValue    Decimal  @map("avg_value") @db.Decimal(15, 4)
+  minValue    Decimal  @map("min_value") @db.Decimal(15, 4)
+  maxValue    Decimal  @map("max_value") @db.Decimal(15, 4)
+
+  sensor Sensor @relation(fields: [sensorId], references: [id])
+
+  @@index([sensorId, periodStart])
+  @@map("sensor_readings_hourly")
+}
+
+model Alert {
+  id             BigInt        @id @default(autoincrement())
+  machineId      BigInt        @map("machine_id")
+  sensorId       BigInt?       @map("sensor_id")
+  alertType      String        @map("alert_type") @db.VarChar(100)
+  severity       AlertSeverity
+  message        String        @db.VarChar(3000)
+  thresholdValue Decimal?      @map("threshold_value") @db.Decimal(15, 4)
+  actualValue    Decimal?      @map("actual_value") @db.Decimal(15, 4)
+  status         AlertStatus   @default(OPEN)
+  acknowledgedBy BigInt?       @map("acknowledged_by")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  resolvedAt     DateTime?     @map("resolved_at")
+
+  machine      Machine @relation(fields: [machineId], references: [id])
+  sensor       Sensor? @relation(fields: [sensorId], references: [id])
+  acknowledger User?   @relation(fields: [acknowledgedBy], references: [id])
+  notifications Notification[]
+
+  @@map("alerts")
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model MaintenanceSchedule {
+  id                   BigInt          @id @default(autoincrement())
+  machineId            BigInt          @map("machine_id")
+  maintenanceType      MaintenanceType @map("maintenance_type")
+  frequencyDays        Int             @map("frequency_days")
+  nextDueDate          DateTime        @map("next_due_date") @db.Date
+  assignedTechnicianId BigInt          @map("assigned_technician_id")
+  status               String          @db.VarChar(50)
+  description          String?         @db.Text
+
+  machine    Machine @relation(fields: [machineId], references: [id])
+  technician User    @relation(fields: [assignedTechnicianId], references: [id])
+
+  @@map("maintenance_schedules")
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+}
+
+model MaintenanceTicket {
+  id              BigInt         @id @default(autoincrement())
+  machineId       BigInt         @map("machine_id")
+  reportedBy      BigInt         @map("reported_by")
+  assignedTo      BigInt?        @map("assigned_to")
+  title           String         @db.VarChar(255)
+  description     String?        @db.Text
+  priority        TicketPriority
+  status          TicketStatus   @default(OPEN)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  resolvedAt      DateTime?      @map("resolved_at")
+  resolutionNotes String?        @map("resolution_notes") @db.Text
+
+  machine       Machine              @relation(fields: [machineId], references: [id])
+  reporter      User                 @relation("TicketReporter", fields: [reportedBy], references: [id])
+  assignee      User?                @relation("TicketAssignee", fields: [assignedTo], references: [id])
+  activityLogs  MachineActivityLog[]
+  notifications Notification[]
+
+  @@map("maintenance_tickets")
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model MachineActivityLog {
+  id              BigInt    @id @default(autoincrement())
+  machineId       BigInt    @map("machine_id")
+  relatedTicketId BigInt?   @map("related_ticket_id")
+  eventType       EventType @map("event_type")
+  description     String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  machine Machine            @relation(fields: [machineId], references: [id])
+  ticket  MaintenanceTicket? @relation(fields: [relatedTicketId], references: [id])
+
+  @@map("machine_activity_logs")
+}
+
+enum EventType {
+  START
+  STOP
+  STATUS_CHANGE
+  MAINTENANCE
+  ALERT
+}
+
+model ProductionRecord {
+  id             BigInt   @id @default(autoincrement())
+  machineId      BigInt   @map("machine_id")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  outputQuantity Decimal  @map("output_quantity") @db.Decimal(15, 2)
+  targetQuantity Decimal  @map("target_quantity") @db.Decimal(15, 2)
+  unit           String   @db.VarChar(50)
+
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  @@map("production_records")
+}
+
+model EnergyConsumption {
+  id             BigInt   @id @default(autoincrement())
+  machineId      BigInt   @map("machine_id")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  consumptionKwh Decimal  @map("consumption_kwh") @db.Decimal(15, 4)
+  cost           Decimal  @db.Decimal(15, 2)
+
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  @@map("energy_consumption")
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  factoryId    BigInt?  @map("factory_id")
+  fullName     String   @map("full_name") @db.VarChar(255)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole
+  phone        String?  @db.VarChar(50)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  factory              Factory?              @relation(fields: [factoryId], references: [id])
+  twinModels           TwinModel[]
+  acknowledgedAlerts   Alert[]
+  maintenanceSchedules MaintenanceSchedule[]
+  reportedTickets      MaintenanceTicket[]   @relation("TicketReporter")
+  assignedTickets      MaintenanceTicket[]   @relation("TicketAssignee")
+  notifications        Notification[]
+  attachments          Attachment[]
+  reports              Report[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+  OPERATOR
+  VIEWER
+}
+
+model Notification {
+  id        BigInt              @id @default(autoincrement())
+  userId    BigInt              @map("user_id")
+  alertId   BigInt?             @map("alert_id")
+  ticketId  BigInt?             @map("ticket_id")
+  title     String              @db.VarChar(255)
+  content   String?             @db.Text
+  isRead    Boolean             @default(false) @map("is_read")
+  channel   NotificationChannel @default(IN_APP)
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user   User               @relation(fields: [userId], references: [id])
+  alert  Alert?             @relation(fields: [alertId], references: [id])
+  ticket MaintenanceTicket? @relation(fields: [ticketId], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+model Attachment {
+  id          BigInt         @id @default(autoincrement())
+  relatedType RelatedType    @map("related_type")
+  relatedId   BigInt         @map("related_id")
+  fileUrl     String         @map("file_url") @db.VarChar(500)
+  fileType    String?        @map("file_type") @db.VarChar(50)
+  uploadedBy  BigInt         @map("uploaded_by")
+  uploadedAt  DateTime       @default(now()) @map("uploaded_at")
+
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@map("attachments")
+}
+
+enum RelatedType {
+  TICKET
+  MAINTENANCE
+  MACHINE
+}
+
+model Report {
+  id             BigInt     @id @default(autoincrement())
+  reportType     ReportType @map("report_type")
+  factoryId      BigInt     @map("factory_id")
+  generatedBy    BigInt     @map("generated_by")
+  dateRangeStart DateTime   @map("date_range_start") @db.Date
+  dateRangeEnd   DateTime   @map("date_range_end") @db.Date
+  fileUrl        String?    @map("file_url") @db.VarChar(500)
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  factory   Factory @relation(fields: [factoryId], references: [id])
+  generator User    @relation(fields: [generatedBy], references: [id])
+
+  @@map("reports")
+}
+
+enum ReportType {
+  PERFORMANCE
+  ENERGY
+  MAINTENANCE
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt   @map("user_id")
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(100)
+  entityId   BigInt   @map("entity_id")
+  ipAddress  String?  @map("ip_address") @db.VarChar(50)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
