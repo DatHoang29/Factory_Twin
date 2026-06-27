@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className="bg-slate-50">
+    <html lang="vi" className="bg-slate-50" suppressHydrationWarning={true}>
       <body className={`${inter.className} min-h-screen p-3 box-border bg-slate-50`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
