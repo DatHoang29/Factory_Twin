@@ -9,10 +9,10 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=apps/api\" \"rm -rf apps/web/.next && npm run dev --workspace=apps/web\"",
     "build": "npm run build --workspaces",
-    "db:generate": "npm run db:generate --workspace=packages/database",
-    "db:migrate": "npm run db:migrate --workspace=packages/database",
-    "db:seed": "npm run db:seed --workspace=packages/database",
-    "db:studio": "npm run db:studio --workspace=packages/database",
+    "db:generate": "prisma generate --schema=packages/database/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=packages/database/prisma/schema.prisma",
+    "db:seed": "ts-node packages/database/prisma/seed.ts",
+    "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma",
     "mock-sensors": "npm run mock-sensors --workspace=apps/api"
   },
   "overrides": {
