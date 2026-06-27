@@ -34,7 +34,7 @@ Tạo tệp `.env` tại **thư mục gốc (root)** của dự án với các t
 
 ```env
 # Database Connection (MariaDB/MySQL)
-DATABASE_URL="mysql://root:password@localhost:3306/factory_digital_twin"
+DATABASE_URL="mysql://fdt_user:fdt_password@localhost:3306/factory_twin"
 
 # API Port & URL Configuration
 PORT=3001
@@ -46,7 +46,7 @@ JWT_SECRET="dev-secret-change-me-for-starglobal-assessment"
 REDIS_HOST="localhost"
 REDIS_PORT=6379
 ```
-*(Thay thế `root` và `password` bằng thông tin đăng nhập MariaDB/MySQL thực tế của bạn)*
+*(Lưu ý: Nếu bạn sử dụng Docker Compose đi kèm dự án, hãy giữ nguyên `fdt_user` và `fdt_password`. Nếu dùng MySQL cài trực tiếp trên máy, hãy thay thế bằng tài khoản của bạn)*
 
 ### 3. Cài đặt các gói phụ thuộc (Dependencies)
 Tại thư mục gốc của dự án, chạy lệnh sau để cài đặt tự động toàn bộ dependencies cho tất cả các Workspace:
